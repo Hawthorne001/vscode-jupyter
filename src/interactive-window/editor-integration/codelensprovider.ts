@@ -3,23 +3,17 @@
 
 import { inject, injectable, optional } from 'inversify';
 import * as vscode from 'vscode';
-
 import { IDebugService } from '../../platform/common/application/types';
-import { ContextKey } from '../../platform/common/contextKey';
 import { dispose } from '../../platform/common/utils/lifecycle';
-
 import { IConfigurationService, IDisposable, IDisposableRegistry } from '../../platform/common/types';
-import { noop } from '../../platform/common/utils/misc';
 import { StopWatch } from '../../platform/common/utils/stopWatch';
 import { IServiceContainer } from '../../platform/ioc/types';
 import { sendTelemetryEvent } from '../../telemetry';
 import { logger } from '../../platform/logging';
 import {
     CodeLensCommands,
-    EditorContexts,
     InteractiveInputScheme,
     NotebookCellScheme,
-    PYTHON_LANGUAGE,
     Telemetry
 } from '../../platform/common/constants';
 import { IDataScienceCodeLensProvider, ICodeWatcher } from './types';
@@ -57,23 +51,6 @@ export class DataScienceCodeLensProvider implements IDataScienceCodeLensProvider
         if (this.debugLocationTracker) {
             disposableRegistry.push(this.debugLocationTracker.updated(this.onDebugLocationUpdated.bind(this)));
         }
-
-        disposableRegistry.push(vscode.window.onDidChangeActiveTextEditor(() => this.onChangedActiveTextEditor()));
-        this.onChangedActiveTextEditor();
-    }
-
-    private onChangedActiveTextEditor() {
-        const activeEditor = vscode.window.activeTextEditor;
-
-        if (
-            !activeEditor ||
-            activeEditor.document.languageId != PYTHON_LANGUAGE ||
-            [NotebookCellScheme, InteractiveInputScheme].includes(activeEditor.document.uri.scheme)
-        ) {
-            // set the context to false so our command doesn't run for other files
-            const hasCellsContext = new ContextKey(EditorContexts.HasCodeCells);
-            hasCellsContext.set(false).catch((ex) => logger.warn('Failed to set jupyter.HasCodeCells context', ex));
-        }
     }
 
     public dispose() {
@@ -83,9 +60,6 @@ export class DataScienceCodeLensProvider implements IDataScienceCodeLensProvider
                 duration: this.totalExecutionTimeInMs / this.totalGetCodeLensCalls
             });
         }
-
-        const editorContext = new ContextKey(EditorContexts.HasCodeCells);
-        editorContext.set(false).catch(noop);
 
         dispose(this.activeCodeWatchers);
     }
@@ -130,14 +104,6 @@ export class DataScienceCodeLensProvider implements IDataScienceCodeLensProvider
         const codeLenses = this.getCodeLens(document);
         this.totalExecutionTimeInMs += stopWatch.elapsedTime;
         this.totalGetCodeLensCalls += 1;
-
-        // Update the hasCodeCells context at the same time we are asked for codelens as VS code will
-        // ask whenever a change occurs. Do this regardless of if we have code lens turned on or not as
-        // shift+enter relies on this code context.
-        const hasCellsContext = new ContextKey(EditorContexts.HasCodeCells);
-        hasCellsContext
-            .set(codeLenses && codeLenses.length > 0)
-            .catch((ex) => logger.debug('Failed to set jupyter.HasCodeCells context', ex));
 
         // Don't provide any code lenses if we have not enabled data science
         const settings = this.configuration.getSettings(document.uri);
