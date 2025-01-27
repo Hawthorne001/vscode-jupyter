@@ -49,7 +49,7 @@ import { IExtensionActivationManager } from './platform/activation/types';
 import { getVSCodeChannel } from './platform/common/application/applicationEnvironment';
 import { getExtensionTempDir } from './platform/common/temp';
 
-export function initializeLoggers(
+export async function initializeLoggers(
     context: IExtensionContext,
     options: {
         addConsoleLogger: boolean;
@@ -83,13 +83,12 @@ export function initializeLoggers(
     if (options?.platform) {
         standardOutputChannel.appendLine(`Platform: ${options.platform} (${options.arch}).`);
     }
-    standardOutputChannel.appendLine(`Temp Storage folder ${getDisplayPath(getExtensionTempDir(context))}`);
+    standardOutputChannel.appendLine(`Home = ${options?.homePath}`);
+    standardOutputChannel.appendLine(`Temp Storage folder ${getDisplayPath(await getExtensionTempDir(context))}`);
     if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
         standardOutputChannel.appendLine(`No workspace folder opened.`);
     } else if (workspace.workspaceFolders.length === 1) {
-        standardOutputChannel.appendLine(
-            `Workspace folder ${getDisplayPath(workspace.workspaceFolders[0].uri)}, Home = ${options?.homePath}`
-        );
+        standardOutputChannel.appendLine(`Workspace folder ${getDisplayPath(workspace.workspaceFolders[0].uri)}`);
     } else {
         standardOutputChannel.appendLine(
             `Multiple Workspace folders opened ${workspace.workspaceFolders

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import type { KernelMessage } from '@jupyterlab/services';
-import { Event, EventEmitter, NotebookDocument, Uri, workspace } from 'vscode';
+import { CancellationToken, Event, EventEmitter, NotebookDocument, Uri, workspace } from 'vscode';
 import { logger } from '../platform/logging';
 import { getDisplayPath } from '../platform/common/platform/fs-paths';
 import { IAsyncDisposable, IAsyncDisposableRegistry, IDisposableRegistry } from '../platform/common/types';
@@ -17,6 +17,7 @@ import {
     INotebookKernelExecution
 } from './types';
 import { JupyterServerProviderHandle } from './jupyter/types';
+import { AsyncEmitter } from '../platform/common/utils/events';
 
 /**
  * Provides kernels to the system. Generally backed by a URI or a notebook object.
@@ -36,6 +37,11 @@ export abstract class BaseCoreKernelProvider implements IKernelProvider {
     protected readonly _onDidCreateKernel = new EventEmitter<IKernel>();
     protected readonly _onDidDisposeKernel = new EventEmitter<IKernel>();
     protected readonly _onKernelStatusChanged = new EventEmitter<{ status: KernelMessage.Status; kernel: IKernel }>();
+    protected readonly _onDidPostInitializeKernel = new AsyncEmitter<{
+        kernel: IKernel;
+        token: CancellationToken;
+        waitUntil(thenable: Thenable<unknown>): void;
+    }>();
     public readonly onKernelStatusChanged = this._onKernelStatusChanged.event;
     public get kernels() {
         const kernels = new Set<IKernel>();
@@ -52,12 +58,13 @@ export abstract class BaseCoreKernelProvider implements IKernelProvider {
         protected disposables: IDisposableRegistry
     ) {
         this.asyncDisposables.push(this);
-        workspace.onDidCloseNotebookDocument((e) => this.disposeOldKernel(e), this, disposables);
+        workspace.onDidCloseNotebookDocument((e) => this.disposeOldKernel(e, 'notebookClosed'), this, disposables);
         disposables.push(this._onDidDisposeKernel);
         disposables.push(this._onDidRestartKernel);
         disposables.push(this._onKernelStatusChanged);
         disposables.push(this._onDidStartKernel);
         disposables.push(this._onDidCreateKernel);
+        disposables.push(this._onDidPostInitializeKernel);
     }
 
     public get onDidDisposeKernel(): Event<IKernel> {
@@ -72,6 +79,13 @@ export abstract class BaseCoreKernelProvider implements IKernelProvider {
     }
     public get onDidCreateKernel(): Event<IKernel> {
         return this._onDidCreateKernel.event;
+    }
+    public get onDidPostInitializeKernel(): Event<{
+        kernel: IKernel;
+        token: CancellationToken;
+        waitUntil(thenable: Thenable<unknown>): void;
+    }> {
+        return this._onDidPostInitializeKernel.event;
     }
     public get(uriOrNotebook: Uri | NotebookDocument | string): IKernel | undefined {
         if (isUri(uriOrNotebook)) {
@@ -133,11 +147,13 @@ export abstract class BaseCoreKernelProvider implements IKernelProvider {
             this.disposables
         );
     }
-    protected disposeOldKernel(notebook: NotebookDocument) {
+    protected disposeOldKernel(notebook: NotebookDocument, reason: 'notebookClosed' | 'createNewKernel') {
         const kernelToDispose = this.kernelsByNotebook.get(notebook);
         if (kernelToDispose) {
             logger.debug(
-                `Disposing kernel associated with ${getDisplayPath(notebook.uri)}, isClosed=${notebook.isClosed}`
+                `Disposing kernel associated with ${getDisplayPath(notebook.uri)}, isClosed=${
+                    notebook.isClosed
+                }, reason = ${reason}`
             );
             this.kernelsById.delete(kernelToDispose.kernel.id);
             this.pendingDisposables.add(kernelToDispose.kernel);
@@ -185,6 +201,11 @@ export abstract class BaseThirdPartyKernelProvider implements IThirdPartyKernelP
     protected readonly _onDidStartKernel = new EventEmitter<IThirdPartyKernel>();
     protected readonly _onDidCreateKernel = new EventEmitter<IThirdPartyKernel>();
     protected readonly _onDidDisposeKernel = new EventEmitter<IThirdPartyKernel>();
+    protected readonly _onDidPostInitializeKernel = new AsyncEmitter<{
+        kernel: IThirdPartyKernel;
+        token: CancellationToken;
+        waitUntil(thenable: Thenable<unknown>): void;
+    }>();
     protected readonly _onKernelStatusChanged = new EventEmitter<{
         status: KernelMessage.Status;
         kernel: IThirdPartyKernel;
@@ -211,6 +232,7 @@ export abstract class BaseThirdPartyKernelProvider implements IThirdPartyKernelP
         disposables.push(this._onKernelStatusChanged);
         disposables.push(this._onDidStartKernel);
         disposables.push(this._onDidCreateKernel);
+        disposables.push(this._onDidPostInitializeKernel);
     }
 
     public get onDidDisposeKernel(): Event<IThirdPartyKernel> {
@@ -224,6 +246,13 @@ export abstract class BaseThirdPartyKernelProvider implements IThirdPartyKernelP
     }
     public get onDidCreateKernel(): Event<IThirdPartyKernel> {
         return this._onDidCreateKernel.event;
+    }
+    public get onDidPostInitializeKernel(): Event<{
+        kernel: IThirdPartyKernel;
+        token: CancellationToken;
+        waitUntil(thenable: Thenable<unknown>): void;
+    }> {
+        return this._onDidPostInitializeKernel.event;
     }
     public get(uri: Uri | string): IThirdPartyKernel | undefined {
         return this.kernelsByUri.get(uri.toString())?.kernel || this.kernelsById.get(uri.toString())?.kernel;
