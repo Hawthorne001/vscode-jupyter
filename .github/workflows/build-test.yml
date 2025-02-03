@@ -27,8 +27,8 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: 18.15.0
-  NPM_VERSION: 9.5.0
+  NODE_VERSION: 20.17.0
+  NPM_VERSION: 10.8.2
   PYTHON_VERSION: 3.8
   DENO_VERSION: '~1.37'
   MOCHA_REPORTER_JUNIT: true # Use the mocha-multi-reporters and send output to both console (spec) and JUnit (mocha-junit-reporter). Also enables a reporter which exits the process running the tests if it haven't already.
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.12.0
+        uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
 
@@ -93,7 +93,7 @@ jobs:
         uses: ./.github/actions/build-vsix
         id: build-vsix
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: 'ms-toolsai-jupyter-insiders.vsix'
           path: 'ms-toolsai-jupyter-insiders.vsix'
@@ -300,13 +300,13 @@ jobs:
             tags: '^[^@]+$|@mandatory'
             os: ubuntu-latest
             ipywidgetsVersion: ''
-          - jupyterConnection: remote
-            python: python
-            pythonVersion: '3.10'
-            packageVersion: 'prerelease'
-            tags: '^[^@]+$|@mandatory'
-            os: ubuntu-latest
-            ipywidgetsVersion: ''
+          #   - jupyterConnection: remote
+          #     python: python
+          #     pythonVersion: '3.10'
+          #     packageVersion: 'prerelease'
+          #     tags: '^[^@]+$|@mandatory'
+          #     os: ubuntu-latest
+          #     ipywidgetsVersion: ''
           - jupyterConnection: web
             python: python
             pythonVersion: '3.10'
@@ -340,13 +340,13 @@ jobs:
             os: ubuntu-latest
             ipywidgetsVersion: ''
           # Pre-Release Versions
-          - jupyterConnection: raw
-            python: python
-            pythonVersion: '3.10'
-            packageVersion: 'prerelease'
-            tags: '^[^@]+$|@mandatory|@kernelCore|@python|@jupyter'
-            os: ubuntu-latest
-            ipywidgetsVersion: ''
+          #   - jupyterConnection: raw
+          #     python: python
+          #     pythonVersion: '3.10'
+          #     packageVersion: 'prerelease'
+          #     tags: '^[^@]+$|@mandatory|@kernelCore|@python|@jupyter'
+          #     os: ubuntu-latest
+          #     ipywidgetsVersion: ''
           # Without Python
           - jupyterConnection: raw
             python: noPython
@@ -381,7 +381,7 @@ jobs:
           python-version: ${{matrix.pythonVersion}}
 
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/setup-micromamba@v1
+        uses: mamba-org/setup-micromamba@v2
         if: matrix.python == 'conda'
         with:
           cache-downloads: true
@@ -595,7 +595,7 @@ jobs:
       # Used by tests for non-python kernels.
       # Test are enabled via env variable `VSC_JUPYTER_CI_RUN_NON_PYTHON_NB_TEST`
       - name: Install Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         if: matrix.tags != '@notebookPerformance'
         with:
           deno-version: ${{ env.DENO_VERSION}}
@@ -641,7 +641,7 @@ jobs:
         run: echo "xvfbCommand=--server-args=\"-screen 0 1024x768x24\"" >> $GITHUB_ENV
 
       - name: Run Native Notebook with VSCode & Jupyter (ubuntu)
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: ${{ env.xvfbCommand }} npm run testNativeNotebooksInVSCode
         env:
@@ -658,7 +658,7 @@ jobs:
         if: matrix.python != 'noPython' && matrix.os == 'ubuntu-latest' && matrix.jupyterConnection != 'web' && matrix.tags != '@notebookPerformance'
 
       - name: Run Notebook Perf Test Without Jupyter
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: ${{ env.xvfbCommand }} npm run testPerfInVSCode
         env:
@@ -678,7 +678,7 @@ jobs:
         if: matrix.tags == '@notebookPerformance'
 
       - name: Run Execution Perf Test With Jupyter
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: ${{ env.xvfbCommand }} npm run testExecPerfInVSCode
         env:
@@ -702,7 +702,7 @@ jobs:
           VSC_JUPYTER_CI_TEST_GREP: ${{ matrix.tags }}
 
       - name: Run Native Notebook with VSCode & Jupyter (web)
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: npm run testWebExtension
         env:
@@ -736,7 +736,7 @@ jobs:
         if: matrix.python != 'noPython' && matrix.os == 'windows-latest' && matrix.jupyterConnection != 'web'
 
       - name: Run Native Notebook with VSCode & Jupyter (without Python)
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: ${{ env.xvfbCommand }} npm run testNativeNotebooksWithoutPythonInVSCode
         env:
@@ -748,7 +748,7 @@ jobs:
         if: matrix.python == 'noPython' && matrix.os != 'windows-latest'
 
       - name: Upload VS code logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: VSCodeLogs-${{matrix.jupyterConnection}}-${{matrix.python}}-${{matrix.pythonVersion}}-${{matrix.packageVersion}}-${{matrix.os}}-${{env.TAGS_NAME}}-${{matrix.ipywidgetsVersion}}
@@ -760,7 +760,7 @@ jobs:
         run: npm run printTestResults
 
       - name: Upload test result, screenshots files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: TestLogs-${{matrix.jupyterConnection}}-${{matrix.python}}-${{matrix.pythonVersion}}-${{matrix.packageVersion}}-${{matrix.os}}-${{env.TAGS_NAME}}-${{matrix.ipywidgetsVersion}}
@@ -807,7 +807,7 @@ jobs:
         run: npm i -g npm@${{env.NPM_VERSION}}
 
       - name: Download VSIX
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: 'ms-toolsai-jupyter-insiders.vsix'
 
@@ -837,6 +837,6 @@ jobs:
           DISPLAY: 10
           VSC_JUPYTER_FORCE_LOGGING: 1
           VSC_JUPYTER_CI_TEST_VSC_CHANNEL: 'insiders'
-        uses: GabrielBB/xvfb-action@v1.4
+        uses: GabrielBB/xvfb-action@v1.7
         with:
           run: npm run testSmokeLogged

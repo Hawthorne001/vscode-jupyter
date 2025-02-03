@@ -35,7 +35,8 @@ import {
     IOutputChannel,
     IJupyterSettings,
     IExperimentService,
-    Experiments
+    Experiments,
+    type ReadWrite
 } from '../../../platform/common/types';
 import { createDeferred, raceTimeout } from '../../../platform/common/utils/async';
 import { DataScience } from '../../../platform/common/utils/localize';
@@ -117,7 +118,7 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
     private exitEvent = new EventEmitter<{ exitCode?: number; reason?: string; stderr: string }>();
     private launchedOnce?: boolean;
     private connectionFile?: Uri;
-    private _launchKernelSpec?: IJupyterKernelSpec;
+    private _launchKernelSpec?: ReadWrite<IJupyterKernelSpec>;
     private interrupter?: Interrupter;
     private exitEventFired = false;
     private readonly _kernelConnectionMetadata: Readonly<
@@ -151,6 +152,7 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
         ) {
             logger.info('Interrupting kernel via SIGINT');
             if (this._process.pid) {
+                await this.interruptChildProcesses(this._process.pid);
                 kill(this._process.pid, 'SIGINT');
             }
         } else if (
@@ -187,7 +189,7 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
         }
         logger.debug(`Kernel process ${proc?.pid}.`);
         let stderr = '';
-        let providedExitCode: number | null;
+        let providedExitCode: number | null = null;
         const deferred = createDeferred();
         deferred.promise.catch(noop);
 
@@ -403,6 +405,33 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
             }
         } catch (ex) {
             logger.warn(`Failed to kill children for ${pid}`, ex);
+        }
+    }
+
+    private async interruptChildProcesses(pid: number) {
+        // Do not remove this code, in in unit tests we end up running this,
+        // then we run into the danger of kill all of the processes on the machine.
+        // because calling `pidtree` without a pid will return all pids and hence everything ends up getting killed.
+        if (!ProcessService.isAlive(pid)) {
+            return;
+        }
+        try {
+            if (this.platform.isWindows) {
+                return;
+            } else {
+                await new Promise<void>((resolve) => {
+                    pidtree(pid, (ex: unknown, pids: number[]) => {
+                        if (ex) {
+                            logger.warn(`Failed to interrupt children for ${pid}`, ex);
+                        } else {
+                            pids.forEach((procId) => kill(procId, 'SIGINT'));
+                        }
+                        resolve();
+                    });
+                });
+            }
+        } catch (ex) {
+            logger.warn(`Failed to interrupt children for ${pid}`, ex);
         }
     }
 

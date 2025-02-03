@@ -340,6 +340,15 @@ export async function loadKernelSpec(
         logger.error(`Failed to parse kernelspec ${specPath}`, ex);
         return;
     }
+
+    // Replace the `resource_dir` in the kernelspec argv with the actual path
+    // Check code in format_kernel_cmd of jupyter_client/manager.py
+    // The values `{connection_file}`, `{prefix}` and `resource_dir` are replaced with the actual values.
+    const resourceDir = path.dirname(specPath.fsPath);
+    kernelJson.argv = kernelJson.argv.map((arg) => {
+        return arg.replaceAll('{resource_dir}', resourceDir);
+    });
+
     if (cancelToken.isCancellationRequested) {
         return;
     }
@@ -367,18 +376,22 @@ export async function loadKernelSpec(
             kernelJson.name = `${kernelJson.name}.${argv.join('#')}`;
         }
     }
-    kernelJson.metadata = kernelJson.metadata || {};
-    kernelJson.metadata.vscode = kernelJson.metadata.vscode || {};
-    if (!kernelJson.metadata.vscode.originalSpecFile) {
-        kernelJson.metadata.vscode.originalSpecFile = specPath.fsPath;
+    const metadata = (kernelJson.metadata as ReadWrite<typeof kernelJson.metadata>) || {};
+    metadata.vscode = metadata.vscode || {};
+    if (!metadata.vscode.originalSpecFile) {
+        metadata.vscode.originalSpecFile = specPath.fsPath;
     }
-    if (!kernelJson.metadata.vscode.originalDisplayName) {
-        kernelJson.metadata.vscode.originalDisplayName = kernelJson.display_name;
+    if (!metadata.vscode.originalDisplayName) {
+        metadata.vscode.originalDisplayName = kernelJson.display_name;
     }
-    if (kernelJson.metadata.originalSpecFile) {
-        kernelJson.metadata.vscode.originalSpecFile = kernelJson.metadata.originalSpecFile;
-        delete kernelJson.metadata.originalSpecFile;
+    if (metadata.originalSpecFile) {
+        metadata.vscode.originalSpecFile = metadata.originalSpecFile;
+        delete metadata.originalSpecFile;
     }
+    kernelJson.metadata = metadata;
+
+    // Some registered kernel specs do not have a name, in this case use the last part of the path
+    kernelJson.name = kernelJson?.name || path.basename(path.dirname(specPath.fsPath));
 
     const kernelSpec: IJupyterKernelSpec = new JupyterKernelSpec(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -388,9 +401,6 @@ export async function loadKernelSpec(
         interpreter?.uri.fsPath || kernelJson?.metadata?.interpreter?.path,
         getKernelRegistrationInfo(kernelJson)
     );
-
-    // Some registered kernel specs do not have a name, in this case use the last part of the path
-    kernelSpec.name = kernelJson?.name || path.basename(path.dirname(specPath.fsPath));
 
     // Possible user deleted the underlying interpreter.
     const interpreterPath = interpreter?.uri.fsPath || kernelJson?.metadata?.interpreter?.path;

@@ -53,7 +53,6 @@ export interface IJupyterSettings {
     readonly useDefaultConfigForJupyter: boolean;
     readonly enablePythonKernelLogging: boolean;
     readonly sendSelectionToInteractiveWindow: boolean;
-    readonly normalizeSelectionForInteractiveWindow: boolean;
     readonly splitRunFileIntoCells: boolean;
     readonly markdownRegularExpression: string;
     readonly codeRegularExpression: string;
@@ -99,6 +98,7 @@ export interface IJupyterSettings {
      * TODO: in debt to merge the two settings.
      */
     readonly completionTriggerCharacters?: Record<string, string[]>;
+    readonly interactiveReplNotebook: boolean;
 }
 
 export interface IWatchableJupyterSettings extends IJupyterSettings {
